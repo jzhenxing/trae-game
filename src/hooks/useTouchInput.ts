@@ -37,10 +37,7 @@ export function useTouchInput(options: UseTouchInputOptions = {}) {
     const handleTouchStart = (e: TouchEvent) => {
       if (!enabledRef.current) return;
       const touch = e.touches[0];
-      const screenWidth = window.innerWidth;
-      const joystickZone = screenWidth * 0.4;
-
-      if (touch.clientX < joystickZone && !joystickRef.current.active) {
+      if (!joystickRef.current.active) {
         e.preventDefault();
         joystickRef.current.active = true;
         joystickRef.current.startX = touch.clientX;
