@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useGame } from '../hooks/useGame';
 import { GameState } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
@@ -9,6 +9,7 @@ import { Joystick } from './Joystick';
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const touchStateRef = useRef({ x: 0, y: 0 });
+  const [joystickState, setJoystickState] = useState({ x: 0, y: 0 });
 
   const { gameState, stats, startGame, showMenu, init, destroy } = useGame(canvasRef, touchStateRef);
 
@@ -16,6 +17,16 @@ export function GameCanvas() {
     init();
     return () => destroy();
   }, [init, destroy]);
+
+  useEffect(() => {
+    let rafId: number;
+    const syncJoystick = () => {
+      setJoystickState({ x: touchStateRef.current.x, y: touchStateRef.current.y });
+      rafId = requestAnimationFrame(syncJoystick);
+    };
+    rafId = requestAnimationFrame(syncJoystick);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
 
   return (
     <div className="game-wrapper">
@@ -41,7 +52,7 @@ export function GameCanvas() {
         )}
 
         {gameState === GameState.PLAYING && (
-          <Joystick direction={touchStateRef.current} />
+          <Joystick direction={joystickState} />
         )}
       </div>
     </div>

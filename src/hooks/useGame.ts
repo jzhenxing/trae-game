@@ -74,6 +74,8 @@ export function useGame(
     containerRef: canvasRef,
     enabled: gameState === GS.PLAYING,
   });
+  const touchRefCurrentRef = useRef(touchRef);
+  touchRefCurrentRef.current = touchRef;
   const { start, stop } = useGameLoop();
 
   const gameLoopRef = useRef<() => void>(() => {});
@@ -123,7 +125,7 @@ export function useGame(
     const game = gameRef.current;
     if (game.state !== GS.PLAYING) return;
 
-    const touch = touchRef.current;
+    const touch = touchRefCurrentRef.current.current;
     const now = Date.now();
 
     const keys = {
@@ -264,7 +266,7 @@ export function useGame(
     game.enemies = game.enemies.filter((e) => e.hp > 0);
     game.particles = updateParticles(game.particles);
     game.stars = updateStars(game.stars);
-  }, [touchRef]);
+  }, []);
 
   const gameLoop = useCallback(() => {
     update();
