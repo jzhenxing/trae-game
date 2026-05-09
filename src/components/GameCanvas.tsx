@@ -4,10 +4,13 @@ import { GameState } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 import { StartScreen } from './StartScreen';
 import { GameOver } from './GameOver';
+import { Joystick } from './Joystick';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { gameState, stats, startGame, showMenu, init, destroy } = useGame(canvasRef);
+  const touchStateRef = useRef({ x: 0, y: 0 });
+
+  const { gameState, stats, startGame, showMenu, init, destroy } = useGame(canvasRef, touchStateRef);
 
   useEffect(() => {
     init();
@@ -36,14 +39,10 @@ export function GameCanvas() {
             onMenu={showMenu}
           />
         )}
-      </div>
 
-      <div className="controls">
-        <div className="control-panel">
-          <h3>PLAYER 1</h3>
-          <p><span className="key">W</span><span className="key">A</span><span className="key">S</span><span className="key">D</span> MOVE</p>
-          <p><span className="key">SPACE</span> SHOOT</p>
-        </div>
+        {gameState === GameState.PLAYING && (
+          <Joystick direction={touchStateRef.current} />
+        )}
       </div>
     </div>
   );

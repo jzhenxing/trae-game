@@ -27,7 +27,7 @@ import { drawBullet } from '../renderer/BulletRenderer';
 import { drawParticle } from '../renderer/ParticleRenderer';
 import { drawHUD } from '../renderer/HUDRenderer';
 import { useGameLoop } from './useGameLoop';
-import { useInput } from './useInput';
+import { useTouchInput } from './useTouchInput';
 
 export interface GameData {
   state: GameState;
@@ -57,9 +57,18 @@ function createInitialGameData(): GameData {
   };
 }
 
-export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+export function useGame(
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  touchStateRef?: React.MutableRefObject<{ x: number; y: number }>
+) {
   const gameRef = useRef<GameData>(createInitialGameData());
-  const keysRef = useInput();
+  const touchRef = useTouchInput({
+    onDirectionChange: (dir) => {
+      if (touchStateRef) {
+        touchStateRef.current = dir;
+      }
+    },
+  });
   const { start, stop } = useGameLoop();
 
   const [gameState, setGameState] = useState<GameState>(GS.MENU);
@@ -112,8 +121,16 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
     const game = gameRef.current;
     if (game.state !== GS.PLAYING) return;
 
-    const keys = keysRef.current;
+    const touch = touchRef.current;
     const now = Date.now();
+
+    const keys = {
+      left: touch.x < -0.3,
+      right: touch.x > 0.3,
+      up: touch.y < -0.3,
+      down: touch.y > 0.3,
+      shoot: true,
+    };
 
     game.player = updatePlayer(game.player, keys);
 
@@ -124,7 +141,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
       ));
     }
 
-    if (keys.shoot && canPlayerShoot(game.player, now, PLAYER_SHOOT_INTERVAL)) {
+    if (canPlayerShoot(game.player, now, PLAYER_SHOOT_INTERVAL)) {
       game.player = updatePlayerShootTime(game.player, now);
       game.bullets.push(
         createPlayerBullet(
@@ -245,7 +262,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
     game.enemies = game.enemies.filter((e) => e.hp > 0);
     game.particles = updateParticles(game.particles);
     game.stars = updateStars(game.stars);
-  }, [keysRef]);
+  }, [touchRef]);
 
   const gameLoop = useCallback(() => {
     update();
