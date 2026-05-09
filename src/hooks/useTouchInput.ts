@@ -7,9 +7,12 @@ export interface TouchDirection {
 
 interface UseTouchInputOptions {
   onDirectionChange?: (direction: TouchDirection) => void;
+  containerRef?: React.RefObject<HTMLElement | null>;
+  enabled?: boolean;
 }
 
 export function useTouchInput(options: UseTouchInputOptions = {}) {
+  const { onDirectionChange, containerRef, enabled = true } = options;
   const touchRef = useRef<TouchDirection>({ x: 0, y: 0 });
   const joystickRef = useRef<{ active: boolean; startX: number; startY: number; touchId: number | null }>({
     active: false,
@@ -20,31 +23,32 @@ export function useTouchInput(options: UseTouchInputOptions = {}) {
 
   const updateDirection = useCallback((x: number, y: number) => {
     touchRef.current = { x, y };
-    options.onDirectionChange?.({ x, y });
-  }, [options.onDirectionChange]);
+    onDirectionChange?.({ x, y });
+  }, [onDirectionChange]);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    e.preventDefault();
+    if (!enabled) return;
     const touch = e.touches[0];
     const screenWidth = window.innerWidth;
     const joystickZone = screenWidth * 0.4;
 
     if (touch.clientX < joystickZone && !joystickRef.current.active) {
+      e.preventDefault();
       joystickRef.current.active = true;
       joystickRef.current.startX = touch.clientX;
       joystickRef.current.startY = touch.clientY;
       joystickRef.current.touchId = touch.identifier;
       updateDirection(0, 0);
     }
-  }, [updateDirection]);
+  }, [enabled, updateDirection]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    e.preventDefault();
-    if (!joystickRef.current.active) return;
+    if (!enabled || !joystickRef.current.active) return;
 
     for (let i = 0; i < e.touches.length; i++) {
       const touch = e.touches[i];
       if (touch.identifier === joystickRef.current.touchId) {
+        e.preventDefault();
         const deltaX = touch.clientX - joystickRef.current.startX;
         const deltaY = touch.clientY - joystickRef.current.startY;
         const maxDistance = 50;
@@ -59,34 +63,38 @@ export function useTouchInput(options: UseTouchInputOptions = {}) {
         break;
       }
     }
-  }, [updateDirection]);
+  }, [enabled, updateDirection]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    e.preventDefault();
+    if (!enabled) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      if (touch.identifier === joystickRef.current.touchId) {
+      if (e.changedTouches[i].identifier === joystickRef.current.touchId) {
         joystickRef.current.active = false;
         joystickRef.current.touchId = null;
         updateDirection(0, 0);
         break;
       }
     }
-  }, [updateDirection]);
+  }, [enabled, updateDirection]);
 
   useEffect(() => {
-    document.addEventListener('touchstart', handleTouchStart, { passive: false });
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd, { passive: false });
-    document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    const target = containerRef?.current || document;
+    const options: AddEventListenerOptions = { passive: false };
+
+    if (enabled) {
+      target.addEventListener('touchstart', handleTouchStart as EventListener, options);
+      target.addEventListener('touchmove', handleTouchMove as EventListener, options);
+      target.addEventListener('touchend', handleTouchEnd as EventListener, options);
+      target.addEventListener('touchcancel', handleTouchEnd as EventListener, options);
+    }
 
     return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-      document.removeEventListener('touchcancel', handleTouchEnd);
+      target.removeEventListener('touchstart', handleTouchStart as EventListener);
+      target.removeEventListener('touchmove', handleTouchMove as EventListener);
+      target.removeEventListener('touchend', handleTouchEnd as EventListener);
+      target.removeEventListener('touchcancel', handleTouchEnd as EventListener);
     };
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
+  }, [enabled, containerRef, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   return touchRef;
 }

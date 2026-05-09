@@ -62,17 +62,19 @@ export function useGame(
   touchStateRef?: React.MutableRefObject<{ x: number; y: number }>
 ) {
   const gameRef = useRef<GameData>(createInitialGameData());
+  const [gameState, setGameState] = useState<GameState>(GS.MENU);
+  const [stats, setStats] = useState<GameStats>({ score: 0, highScore: 0, enemiesDestroyed: 0 });
+
   const touchRef = useTouchInput({
     onDirectionChange: (dir) => {
       if (touchStateRef) {
         touchStateRef.current = dir;
       }
     },
+    containerRef: canvasRef,
+    enabled: gameState === GS.PLAYING,
   });
   const { start, stop } = useGameLoop();
-
-  const [gameState, setGameState] = useState<GameState>(GS.MENU);
-  const [stats, setStats] = useState<GameStats>({ score: 0, highScore: 0, enemiesDestroyed: 0 });
 
   const gameLoopRef = useRef<() => void>(() => {});
 
