@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('game loads correctly', async ({ page }) => {
-  await page.goto('http://localhost:5173/trae-game/');
+  await page.goto('/');
 
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();

@@ -33,13 +33,13 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps
 
       - name: Run typecheck and lint
         run: npm run typecheck
 
       - name: Run tests
-        run: npm test
+        run: npx playwright test
 
   build:
     runs-on: ubuntu-latest
