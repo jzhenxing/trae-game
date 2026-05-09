@@ -1,38 +1,62 @@
-import type { Rect } from '../types';
-import { CANVAS_WIDTH, MECH_WIDTH, MECH_HEIGHT } from '../constants';
+import type { Player, Enemy, Bullet } from '../types';
 
-export function boxCollision(a: Rect, b: Rect): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
+export function boxCollision(
+  ax: number,
+  ay: number,
+  aw: number,
+  ah: number,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number
+): boolean {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+export function checkPlayerBulletEnemyCollision(
+  bullet: Bullet,
+  enemy: Enemy
+): boolean {
+  return boxCollision(
+    bullet.x,
+    bullet.y,
+    bullet.width,
+    bullet.height,
+    enemy.x,
+    enemy.y,
+    enemy.width,
+    enemy.height
   );
 }
 
-export function getHitbox(x: number, y: number): Rect {
-  return {
-    x,
-    y: y - MECH_HEIGHT,
-    width: MECH_WIDTH,
-    height: MECH_HEIGHT,
-  };
+export function checkEnemyBulletPlayerCollision(
+  bullet: Bullet,
+  player: Player
+): boolean {
+  return boxCollision(
+    bullet.x,
+    bullet.y,
+    bullet.width,
+    bullet.height,
+    player.x,
+    player.y,
+    player.width,
+    player.height
+  );
 }
 
-export function getAttackHitbox(
-  x: number,
-  y: number,
-  facing: number
-): Rect {
-  const offset = facing === 1 ? MECH_WIDTH : -40;
-  return {
-    x: x + offset,
-    y: y - MECH_HEIGHT + 20,
-    width: 40,
-    height: 60,
-  };
-}
-
-export function clampPosition(x: number): number {
-  return Math.max(0, Math.min(CANVAS_WIDTH - MECH_WIDTH, x));
+export function checkEnemyPlayerCollision(
+  enemy: Enemy,
+  player: Player
+): boolean {
+  return boxCollision(
+    enemy.x,
+    enemy.y,
+    enemy.width,
+    enemy.height,
+    player.x,
+    player.y,
+    player.width,
+    player.height
+  );
 }

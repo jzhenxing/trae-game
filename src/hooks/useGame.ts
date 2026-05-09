@@ -1,39 +1,59 @@
 import { useRef, useCallback, useState } from 'react';
-import { GameState, MechState } from '../types';
-import type { Particle, Star, GameResult } from '../types';
-import type { MechData } from '../game/Mech';
-import { createMech, updateMech, takeDamage } from '../game/Mech';
-import { updateParticles } from '../game/Particle';
-import { boxCollision, getHitbox, getAttackHitbox } from '../game/Collision';
-import { ATTACK_DAMAGE, SKILL_DAMAGE } from '../constants';
+import type { Player, Enemy, Bullet, Particle, Star, GameStats, GameState } from '../types';
+import { GameState as GS } from '../types';
+import { createPlayer, updatePlayer, damagePlayer, canPlayerShoot, updatePlayerShootTime } from '../game/Player';
+import { createEnemy, createBoss, updateEnemy, isEnemyOffScreen } from '../game/Enemy';
+import { createPlayerBullet, createEnemyBullet, updateBullet, isBulletOffScreen } from '../game/Bullet';
+import { createExplosion, createThrustParticle, updateParticles } from '../game/Particle';
+import { updateStars } from '../renderer/BackgroundRenderer';
+import { checkPlayerBulletEnemyCollision, checkEnemyBulletPlayerCollision, checkEnemyPlayerCollision } from '../game/Collision';
+import {
+  INITIAL_SPAWN_INTERVAL,
+  MIN_SPAWN_INTERVAL,
+  SPAWN_DECREASE_SCORE,
+  SPAWN_DECREASE_AMOUNT,
+  ENEMY_SCORE,
+  BOSS_SPAWN_SCORE,
+  BOSS_SCORE,
+  PLAYER_SHOOT_INTERVAL,
+  ENEMY_SHOOT_INTERVAL,
+  CANVAS_WIDTH,
+  COLORS,
+} from '../constants';
 import { drawBackground } from '../renderer/BackgroundRenderer';
-import { drawGround } from '../renderer/GroundRenderer';
-import { drawMech } from '../renderer/MechRenderer';
-import { drawUI } from '../renderer/UIRenderer';
-import { drawParticles } from '../renderer/ParticleRenderer';
-import { createStars } from '../renderer/BackgroundRenderer';
+import { drawPlayer } from '../renderer/PlayerRenderer';
+import { drawEnemy } from '../renderer/EnemyRenderer';
+import { drawBullet } from '../renderer/BulletRenderer';
+import { drawParticle } from '../renderer/ParticleRenderer';
+import { drawHUD } from '../renderer/HUDRenderer';
 import { useGameLoop } from './useGameLoop';
 import { useInput } from './useInput';
 
 export interface GameData {
   state: GameState;
-  mech1: MechData;
-  mech2: MechData;
+  player: Player;
+  enemies: Enemy[];
+  bullets: Bullet[];
   particles: Particle[];
   stars: Star[];
+  stats: GameStats;
+  spawnTimer: number;
+  lastBossScore: number;
   screenShake: number;
-  result: GameResult | null;
 }
 
 function createInitialGameData(): GameData {
   return {
-    state: GameState.MENU,
-    mech1: createMech(100, true),
-    mech2: createMech(620, false),
+    state: GS.MENU,
+    player: createPlayer(),
+    enemies: [],
+    bullets: [],
     particles: [],
-    stars: createStars(100),
+    stars: [],
+    stats: { score: 0, highScore: parseInt(localStorage.getItem('neonStrikerHighScore') || '0'), enemiesDestroyed: 0 },
+    spawnTimer: 0,
+    lastBossScore: 0,
     screenShake: 0,
-    result: null,
   };
 }
 
@@ -42,8 +62,8 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   const keysRef = useInput();
   const { start, stop } = useGameLoop();
 
-  const [gameState, setGameState] = useState<GameState>(GameState.MENU);
-  const [result, setResult] = useState<GameResult | null>(null);
+  const [gameState, setGameState] = useState<GameState>(GS.MENU);
+  const [stats, setStats] = useState<GameStats>({ score: 0, highScore: 0, enemiesDestroyed: 0 });
 
   const gameLoopRef = useRef<() => void>(() => {});
 
@@ -63,61 +83,168 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
         Math.random() * game.screenShake - game.screenShake / 2,
         Math.random() * game.screenShake - game.screenShake / 2
       );
+      game.screenShake--;
     }
 
     drawBackground(ctx, game.stars);
-    drawGround(ctx);
 
-    if (game.state === GameState.PLAYING || game.state === GameState.GAME_OVER) {
-      drawMech(ctx, game.mech1);
-      drawMech(ctx, game.mech2);
-      drawUI(ctx, game.mech1, game.mech2);
+    for (const enemy of game.enemies) {
+      drawEnemy(ctx, enemy);
     }
 
-    drawParticles(ctx, game.particles);
+    if (game.state === GS.PLAYING || game.state === GS.GAME_OVER) {
+      drawPlayer(ctx, game.player);
+      drawHUD(ctx, game.player, game.stats);
+    }
+
+    for (const bullet of game.bullets) {
+      drawBullet(ctx, bullet);
+    }
+
+    for (const particle of game.particles) {
+      drawParticle(ctx, particle);
+    }
 
     ctx.restore();
   }, [canvasRef]);
 
   const update = useCallback(() => {
     const game = gameRef.current;
-    if (game.state !== GameState.PLAYING) return;
+    if (game.state !== GS.PLAYING) return;
 
     const keys = keysRef.current;
+    const now = Date.now();
 
-    const result1 = updateMech(game.mech1, keys.p1, game.mech2);
-    game.mech1 = result1.mech;
-    game.particles.push(...result1.newParticles);
+    game.player = updatePlayer(game.player, keys);
 
-    const result2 = updateMech(game.mech2, keys.p2, game.mech1);
-    game.mech2 = result2.mech;
-    game.particles.push(...result2.newParticles);
-
-    checkCollisions(game);
-
-    game.particles = updateParticles(game.particles);
-
-    if (game.screenShake > 0) game.screenShake--;
-
-    if (game.mech1.hp <= 0) {
-      game.state = GameState.GAME_OVER;
-      game.result = {
-        winner: 2,
-        p1Stats: game.mech1.stats,
-        p2Stats: game.mech2.stats,
-      };
-      setGameState(GameState.GAME_OVER);
-      setResult(game.result);
-    } else if (game.mech2.hp <= 0) {
-      game.state = GameState.GAME_OVER;
-      game.result = {
-        winner: 1,
-        p1Stats: game.mech1.stats,
-        p2Stats: game.mech2.stats,
-      };
-      setGameState(GameState.GAME_OVER);
-      setResult(game.result);
+    if (Math.random() < 0.3) {
+      game.particles.push(...createThrustParticle(
+        game.player.x + game.player.width / 2,
+        game.player.y + game.player.height
+      ));
     }
+
+    if (keys.shoot && canPlayerShoot(game.player, now, PLAYER_SHOOT_INTERVAL)) {
+      game.player = updatePlayerShootTime(game.player, now);
+      game.bullets.push(
+        createPlayerBullet(
+          game.player.x + game.player.width / 2,
+          game.player.y
+        )
+      );
+    }
+
+    game.spawnTimer++;
+    const spawnInterval = Math.max(
+      MIN_SPAWN_INTERVAL / 16.67,
+      (INITIAL_SPAWN_INTERVAL - Math.floor(game.stats.score / SPAWN_DECREASE_SCORE) * SPAWN_DECREASE_AMOUNT) / 16.67
+    );
+
+    if (game.spawnTimer >= spawnInterval) {
+      game.spawnTimer = 0;
+      const spawnX = 40 + Math.random() * (CANVAS_WIDTH - 80);
+      game.enemies.push(createEnemy(spawnX));
+    }
+
+    if (game.stats.score - game.lastBossScore >= BOSS_SPAWN_SCORE) {
+      game.lastBossScore = game.stats.score;
+      game.enemies.push(createBoss());
+      game.screenShake = 15;
+    }
+
+    game.enemies = game.enemies
+      .map((e) => {
+        let enemy = updateEnemy(e);
+        if (enemy.type === 'boss' && enemy.y >= 60) {
+          enemy.y = 60;
+        }
+        return enemy;
+      })
+      .filter((e) => !isEnemyOffScreen(e));
+
+    game.bullets = game.bullets.map(updateBullet).filter((b) => !isBulletOffScreen(b));
+
+    for (const bullet of game.bullets) {
+      if (bullet.isPlayerBullet) {
+        for (const enemy of game.enemies) {
+          if (checkPlayerBulletEnemyCollision(bullet, enemy)) {
+            bullet.y = -100;
+            enemy.hp -= bullet.damage;
+            game.particles.push(...createExplosion(bullet.x, bullet.y, COLORS.accent, 5));
+
+            if (enemy.hp <= 0) {
+              enemy.hp = 0;
+              const score = enemy.type === 'boss' ? BOSS_SCORE : ENEMY_SCORE;
+              game.stats.score += score;
+              game.stats.enemiesDestroyed++;
+              if (game.stats.score > game.stats.highScore) {
+                game.stats.highScore = game.stats.score;
+                localStorage.setItem('neonStrikerHighScore', String(game.stats.score));
+              }
+              setStats({ ...game.stats });
+              game.particles.push(...createExplosion(
+                enemy.x + enemy.width / 2,
+                enemy.y + enemy.height / 2,
+                enemy.type === 'boss' ? COLORS.accent : COLORS.secondary,
+                enemy.type === 'boss' ? 30 : 15
+              ));
+              game.screenShake = enemy.type === 'boss' ? 20 : 8;
+            }
+          }
+        }
+      } else {
+        if (!game.player.invincible && checkEnemyBulletPlayerCollision(bullet, game.player)) {
+          bullet.y = 800;
+          game.player = damagePlayer(game.player);
+          game.particles.push(...createExplosion(
+            game.player.x + game.player.width / 2,
+            game.player.y + game.player.height / 2,
+            COLORS.hpLow,
+            10
+          ));
+          game.screenShake = 12;
+
+          if (game.player.hp <= 0) {
+            game.state = GS.GAME_OVER;
+            setGameState(GS.GAME_OVER);
+          }
+        }
+      }
+    }
+
+    for (const enemy of game.enemies) {
+      if (!game.player.invincible && checkEnemyPlayerCollision(enemy, game.player)) {
+        game.player = damagePlayer(game.player);
+        game.particles.push(...createExplosion(
+          game.player.x + game.player.width / 2,
+          game.player.y + game.player.height / 2,
+          COLORS.hpLow,
+          10
+        ));
+        game.screenShake = 15;
+
+        if (game.player.hp <= 0) {
+          game.state = GS.GAME_OVER;
+          setGameState(GS.GAME_OVER);
+        }
+      }
+
+      if (now - enemy.lastShotTime > ENEMY_SHOOT_INTERVAL && enemy.y > 0 && enemy.y < 600) {
+        enemy.lastShotTime = now;
+        game.bullets.push(
+          createEnemyBullet(
+            enemy.x + enemy.width / 2,
+            enemy.y + enemy.height,
+            game.player.x + game.player.width / 2,
+            game.player.y + game.player.height / 2
+          )
+        );
+      }
+    }
+
+    game.enemies = game.enemies.filter((e) => e.hp > 0);
+    game.particles = updateParticles(game.particles);
+    game.stars = updateStars(game.stars);
   }, [keysRef]);
 
   const gameLoop = useCallback(() => {
@@ -129,16 +256,16 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
 
   const startGame = useCallback(() => {
     gameRef.current = createInitialGameData();
-    gameRef.current.state = GameState.PLAYING;
-    setGameState(GameState.PLAYING);
-    setResult(null);
+    gameRef.current.state = GS.PLAYING;
+    setGameState(GS.PLAYING);
+    setStats({ ...gameRef.current.stats });
   }, []);
 
   const showMenu = useCallback(() => {
     gameRef.current = createInitialGameData();
-    gameRef.current.state = GameState.MENU;
-    setGameState(GameState.MENU);
-    setResult(null);
+    gameRef.current.state = GS.MENU;
+    setGameState(GS.MENU);
+    setStats({ ...gameRef.current.stats });
   }, []);
 
   const init = useCallback(() => {
@@ -152,42 +279,10 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   return {
     gameRef,
     gameState,
-    result,
+    stats,
     startGame,
     showMenu,
     init,
     destroy,
   };
-}
-
-function checkCollisions(game: GameData): void {
-  if (game.mech1.hitboxActive && game.mech1.attackTimer > 5) {
-    const attackBox = getAttackHitbox(game.mech1.x, game.mech1.y, game.mech1.facing);
-    const targetBox = getHitbox(game.mech2.x, game.mech2.y);
-
-    if (boxCollision(attackBox, targetBox)) {
-      const damage = game.mech1.state === MechState.SKILL ? SKILL_DAMAGE : ATTACK_DAMAGE;
-      const result = takeDamage(game.mech2, damage, game.mech1);
-      game.mech2 = result.mech;
-      if (result.attacker) game.mech1 = result.attacker;
-      game.particles.push(...result.newParticles);
-      game.mech1.hitboxActive = false;
-      game.screenShake = 10;
-    }
-  }
-
-  if (game.mech2.hitboxActive && game.mech2.attackTimer > 5) {
-    const attackBox = getAttackHitbox(game.mech2.x, game.mech2.y, game.mech2.facing);
-    const targetBox = getHitbox(game.mech1.x, game.mech1.y);
-
-    if (boxCollision(attackBox, targetBox)) {
-      const damage = game.mech2.state === MechState.SKILL ? SKILL_DAMAGE : ATTACK_DAMAGE;
-      const result = takeDamage(game.mech1, damage, game.mech2);
-      game.mech1 = result.mech;
-      if (result.attacker) game.mech2 = result.attacker;
-      game.particles.push(...result.newParticles);
-      game.mech2.hitboxActive = false;
-      game.screenShake = 10;
-    }
-  }
 }

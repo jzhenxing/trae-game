@@ -1,43 +1,37 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { P1_KEYS, P2_KEYS } from '../constants';
+import { KEYS } from '../constants';
 
-export type KeyActions = {
-  p1: Record<string, boolean>;
-  p2: Record<string, boolean>;
-};
-
-function mapKeys(pressedKeys: Set<string>): KeyActions {
-  const p1: Record<string, boolean> = {};
-  const p2: Record<string, boolean> = {};
-
-  for (const [key, action] of Object.entries(P1_KEYS)) {
-    p1[action] = pressedKeys.has(key);
-  }
-  for (const [key, action] of Object.entries(P2_KEYS)) {
-    p2[action] = pressedKeys.has(key);
-  }
-
-  return { p1, p2 };
+export interface KeyActions {
+  left: boolean;
+  right: boolean;
+  up: boolean;
+  down: boolean;
+  shoot: boolean;
 }
 
 export function useInput(): React.RefObject<KeyActions> {
   const keysRef = useRef<KeyActions>({
-    p1: { left: false, right: false, jump: false, attack: false, defend: false, skill: false },
-    p2: { left: false, right: false, jump: false, attack: false, defend: false, skill: false },
+    left: false,
+    right: false,
+    up: false,
+    down: false,
+    shoot: false,
   });
-  const pressedKeysRef = useRef<Set<string>>(new Set());
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
-      e.preventDefault();
-    }
-    pressedKeysRef.current.add(e.key);
-    keysRef.current = mapKeys(pressedKeysRef.current);
+    if (KEYS.left.includes(e.code as typeof KEYS.left[number])) keysRef.current.left = true;
+    if (KEYS.right.includes(e.code as typeof KEYS.right[number])) keysRef.current.right = true;
+    if (KEYS.up.includes(e.code as typeof KEYS.up[number])) keysRef.current.up = true;
+    if (KEYS.down.includes(e.code as typeof KEYS.down[number])) keysRef.current.down = true;
+    if (KEYS.shoot.includes(e.code as typeof KEYS.shoot[number])) keysRef.current.shoot = true;
   }, []);
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    pressedKeysRef.current.delete(e.key);
-    keysRef.current = mapKeys(pressedKeysRef.current);
+    if (KEYS.left.includes(e.code as typeof KEYS.left[number])) keysRef.current.left = false;
+    if (KEYS.right.includes(e.code as typeof KEYS.right[number])) keysRef.current.right = false;
+    if (KEYS.up.includes(e.code as typeof KEYS.up[number])) keysRef.current.up = false;
+    if (KEYS.down.includes(e.code as typeof KEYS.down[number])) keysRef.current.down = false;
+    if (KEYS.shoot.includes(e.code as typeof KEYS.shoot[number])) keysRef.current.shoot = false;
   }, []);
 
   useEffect(() => {

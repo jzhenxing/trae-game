@@ -2,13 +2,12 @@ import { useRef, useEffect } from 'react';
 import { useGame } from '../hooks/useGame';
 import { GameState } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
-import { StartOverlay } from './StartOverlay';
-import { GameOverOverlay } from './GameOverOverlay';
-import { Controls } from './Controls';
+import { StartScreen } from './StartScreen';
+import { GameOver } from './GameOver';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { gameState, result, startGame, showMenu, init, destroy } = useGame(canvasRef);
+  const { gameState, stats, startGame, showMenu, init, destroy } = useGame(canvasRef);
 
   useEffect(() => {
     init();
@@ -25,19 +24,27 @@ export function GameCanvas() {
         />
 
         {gameState === GameState.MENU && (
-          <StartOverlay onStart={startGame} />
+          <StartScreen onStart={startGame} highScore={stats.highScore} />
         )}
 
-        {gameState === GameState.GAME_OVER && result && (
-          <GameOverOverlay
-            result={result}
+        {gameState === GameState.GAME_OVER && (
+          <GameOver
+            score={stats.score}
+            highScore={stats.highScore}
+            enemiesDestroyed={stats.enemiesDestroyed}
             onRestart={startGame}
             onMenu={showMenu}
           />
         )}
       </div>
 
-      <Controls />
+      <div className="controls">
+        <div className="control-panel">
+          <h3>PLAYER 1</h3>
+          <p><span className="key">W</span><span className="key">A</span><span className="key">S</span><span className="key">D</span> MOVE</p>
+          <p><span className="key">SPACE</span> SHOOT</p>
+        </div>
+      </div>
     </div>
   );
 }
