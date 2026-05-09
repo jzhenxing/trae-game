@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { GameState, MechState } from '../types';
 import type { Particle, Star, GameResult } from '../types';
 import type { MechData } from '../game/Mech';
@@ -41,6 +41,11 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   const gameRef = useRef<GameData>(createInitialGameData());
   const keysRef = useInput();
   const { start, stop } = useGameLoop();
+
+  const [gameState, setGameState] = useState<GameState>(GameState.MENU);
+  const [result, setResult] = useState<GameResult | null>(null);
+
+  const gameLoopRef = useRef<() => void>(() => {});
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -101,6 +106,8 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
         p1Stats: game.mech1.stats,
         p2Stats: game.mech2.stats,
       };
+      setGameState(GameState.GAME_OVER);
+      setResult(game.result);
     } else if (game.mech2.hp <= 0) {
       game.state = GameState.GAME_OVER;
       game.result = {
@@ -108,6 +115,8 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
         p1Stats: game.mech1.stats,
         p2Stats: game.mech2.stats,
       };
+      setGameState(GameState.GAME_OVER);
+      setResult(game.result);
     }
   }, [keysRef]);
 
@@ -116,19 +125,25 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
     render();
   }, [update, render]);
 
+  gameLoopRef.current = gameLoop;
+
   const startGame = useCallback(() => {
     gameRef.current = createInitialGameData();
     gameRef.current.state = GameState.PLAYING;
+    setGameState(GameState.PLAYING);
+    setResult(null);
   }, []);
 
   const showMenu = useCallback(() => {
     gameRef.current = createInitialGameData();
     gameRef.current.state = GameState.MENU;
+    setGameState(GameState.MENU);
+    setResult(null);
   }, []);
 
   const init = useCallback(() => {
-    start(gameLoop);
-  }, [start, gameLoop]);
+    start(() => gameLoopRef.current());
+  }, [start]);
 
   const destroy = useCallback(() => {
     stop();
@@ -136,6 +151,8 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
 
   return {
     gameRef,
+    gameState,
+    result,
     startGame,
     showMenu,
     init,

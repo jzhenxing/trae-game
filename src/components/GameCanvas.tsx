@@ -8,15 +8,12 @@ import { Controls } from './Controls';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { gameRef, startGame, showMenu, init, destroy } = useGame(canvasRef);
+  const { gameState, result, startGame, showMenu, init, destroy } = useGame(canvasRef);
 
   useEffect(() => {
     init();
     return () => destroy();
   }, [init, destroy]);
-
-  const gameState = gameRef.current?.state ?? GameState.MENU;
-  const result = gameRef.current?.result ?? null;
 
   return (
     <div className="game-wrapper">
